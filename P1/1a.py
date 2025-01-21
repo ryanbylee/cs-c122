@@ -1,42 +1,67 @@
 class Read_map():
-    def __init__(self, reference, read, threshold):
+    def __init__(self, reference, reads, threshold, paired = False):
         self.reference = reference
-        self.reads = read
+        self.reads = reads
         self.threshold = threshold
-        self.len_read = 50
+        self.paired = paired
 
+        if paired:
+            self.paired_dist = self.get_paired_dist()
+
+
+    def get_paired_dist(self):
+        # calculate the distance between the paired reads
+        # assume the distance is same for all paired reads
+
+        first_read = self.reads[6]
+        second_read = self.reads[7]
+
+        pos1 = self.align_read(first_read)
+        pos2 = self.align_read(second_read)
+
+        distance = pos2 - (pos1 + len(first_read))
+        return distance
+    
+
+    def align_read(self, read):
+        # align the reads to the reference genome
+        # return the position of the read in the reference genome
+        read_length = len(read)
+        for i in range(len(self.reference) - read_length + 1):
+            window = self.reference[i:i+read_length]
+            count = 0
+            possible_mutation_loc = []
+            for j in range(read_length):
+                if read[j] != window[j]:
+                    count += 1
+                    possible_mutation_loc.append(j)
+
+            if count <= self.threshold:
+                return i, possible_mutation_loc
+            
+        return -1, None
+    
     def read_map_sliding_window(self):
         # sliding window
         # create predcited_mutations.txt
-
         mutation_list = open('predicted_mutations.txt', 'w')
         dup_list = {}
         for read in self.reads:
-            
-            read_length = len(read)
-            if read_length < self.len_read:
-                continue
-            for i in range(len(self.reference) - read_length + 1):
-                window = self.reference[i:i+read_length]
-                count = 0
-                for j in range(read_length):
-                    if read[j] != window[j]:
-                        count += 1
+            start, possible_mutation_loc = self.align_read(read)
 
-                if count <= self.threshold:
-                    for j in range(read_length):
+            # if the read is aligned
+            if start > 0:
+                for j in possible_mutation_loc:
+                    if start + j not in dup_list:
+                        dup_list[start + j] = [read[j]]
+                    else:
+                        dup_list[start + j].append(read[j])
 
-                        if read[j] != window[j]:
-                            if i + j not in dup_list:
-                                dup_list[i + j] = [read[j]]
-                            else:
-                                dup_list[i + j].append(read[j])
-                        
-                for pos, value in dup_list.items():
-                    # take the most common mutation in value
-                    mutation = max(value, key = value.count)
-                    mutation_list.write(
-                        '>S' + str(pos) + ' ' + self.reference[pos] + ' ' + mutation + '\n')
+        for pos, value in dup_list.items():
+            # take the most common mutation in value
+            mutation = max(value, key = value.count)
+            mutation_list.write(
+                '>S' + str(pos) + ' ' + self.reference[pos] + ' ' + mutation + '\n')
                         
         mutation_list.close()
 
@@ -85,32 +110,17 @@ class Read_map():
 
 
 def main():
-    reference = open('sample_reference_genome.fasta', 'r')
+    reference = open('project1a_reference_genome.fasta', 'r')
     reference = ''.join(reference.readlines()[1:]).replace('\n', '')
 
-    sample_no_error_single = open('sample_no_error_paired_reads.fasta', 'r')
-    sample_no_error_single = sample_no_error_single.readlines()
-    sample_no_error_single = [line.replace('\n', '') for line in sample_no_error_single if line[0] != '>']
+    reads = open('project1a_with_error_paired_reads.fasta', 'r')
+    reads = [line.replace('\n', '') for line in reads.readlines() if line[0] != '>']
 
     # read_map
-    mapping = Read_map(reference, sample_no_error_single, 3)
+    mapping = Read_map(reference, reads, 5, True)
     mapping.read_map_sliding_window()
 
     # mapping.read_map_sliding_window()
-
-
-    # sanity check
-    pred = open('predicted_mutations.txt', 'r')
-    ans = open('sample_mutations.txt', 'r')
-
-    pred = pred.readlines()
-    ans = ans.readlines()
-
-    ans_filtered = [line for line in ans if line[0:2] == '>S']
-
-    for line in ans_filtered:
-        if line not in pred:
-            print("not matched", line)
 
 
 if __name__ == '__main__':
