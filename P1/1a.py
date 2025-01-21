@@ -1,3 +1,5 @@
+import itertools
+
 class Read_map():
     def __init__(self, reference, reads, threshold, paired = False):
         self.reference = reference
@@ -5,13 +7,14 @@ class Read_map():
         self.threshold = threshold
         self.paired = paired
 
-        if paired:
-            self.paired_dist = self.get_paired_dist()
+        # if paired:
+        #     self.paired_dist = self.get_paired_dist()
 
 
     def get_paired_dist(self):
         # calculate the distance between the paired reads
         # assume the distance is same for all paired reads
+        # useful info, but not necessary
 
         first_read = self.reads[6]
         second_read = self.reads[7]
@@ -27,6 +30,8 @@ class Read_map():
         # align the reads to the reference genome
         # return the position of the read in the reference genome
         read_length = len(read)
+        if read_length != 50:
+            return -1, None
         for i in range(len(self.reference) - read_length + 1):
             window = self.reference[i:i+read_length]
             count = 0
@@ -45,19 +50,20 @@ class Read_map():
         # sliding window
         # create predcited_mutations.txt
         mutation_list = open('predicted_mutations.txt', 'w')
-        dup_list = {}
+        overlapping_mutations = {}
         for read in self.reads:
             start, possible_mutation_loc = self.align_read(read)
 
             # if the read is aligned
             if start > 0:
                 for j in possible_mutation_loc:
-                    if start + j not in dup_list:
-                        dup_list[start + j] = [read[j]]
+                    if start + j not in overlapping_mutations:
+                        overlapping_mutations[start + j] = [read[j]]
                     else:
-                        dup_list[start + j].append(read[j])
-
-        for pos, value in dup_list.items():
+                        overlapping_mutations[start + j].append(read[j])
+        for pos, value in overlapping_mutations.items():
+            if len(value) < 3:
+                continue
             # take the most common mutation in value
             mutation = max(value, key = value.count)
             mutation_list.write(
@@ -67,7 +73,18 @@ class Read_map():
 
     def create_position_map(self):
         pos_map = {}
-        len_frag = self.len_read//5
+        len_frag = 10
+
+        # create the keys for the dictionary, which are all possible combinations of A, T, C, G in length of 10
+        for string in itertools.product('AGCT', repeat=10):
+            pos_map[''.join(string)] = []
+
+        
+        for string in pos_map.keys():
+            # locate the position of the fragment in the reference genome
+            for i in range(len(self.reference) - len_frag + 1):
+                if self.reference[i:i+len_frag] == string:
+                    pos_map[string].append(i)
 
         for read in self.reads:
             frag_list = [read[0:len_frag], 
@@ -79,33 +96,10 @@ class Read_map():
             # for each fragment, find the position in the reference and store it in pos_map
             for i, frag in enumerate(frag_list):
                 # search the reference for the fragment
-                search_ref = self.reference
-                while search_ref != '':
-                    pos = search_ref.find(frag)
-                    if pos != -1:
-                        search_ref = search_ref[pos+len_frag:]
-                        if pos in pos_map:
-                            pos_map[frag].append((pos, i))
-                        else:
-                            pos_map[frag] = [(pos, i)]
-                    else:
-                        break
+            #    search for the fragment in pos_map
+                if frag in pos_map:
+                    print('frag ' + str(i) + ' found')
         return pos_map
-    
-    def read_map_indexing(self):
-        # create predcited_mutations.txt
-        # use the position map to find the mutations
-        mutation_list = open('predicted_mutations.txt', 'w')
-        pos_map = self.create_position_map()
-        dup_list = set()
-        for frag, (loc, idx) in pos_map.items():
-            pass
-            
-
-            
-
-            
-
 
 
 
@@ -117,8 +111,9 @@ def main():
     reads = [line.replace('\n', '') for line in reads.readlines() if line[0] != '>']
 
     # read_map
-    mapping = Read_map(reference, reads, 5, True)
+    mapping = Read_map(reference, reads, 2, True)
     mapping.read_map_sliding_window()
+    # mapping.create_position_map()
 
     # mapping.read_map_sliding_window()
 
