@@ -1,4 +1,5 @@
 import itertools
+from tqdm import tqdm
 
 class Read_mapper():
     def __init__(self, reference, reads, threshold, approach):
@@ -23,7 +24,6 @@ class Read_mapper():
         return distance
     
 
-        
     def needleman_wunsch(self, read, ref):
         # Needleman-Wunsch Algorithm, global alignment using dynamic programming
 
@@ -36,13 +36,11 @@ class Read_mapper():
             dp[i][0] = i
         for j in range(1, len(ref) + 1):
             dp[0][j] = j
-
         # list of tuples in form of (type of operation, position)
         possible_indel_sub_loc = []
 
         def backtrack(dp, read, i, j):
             # backtrack the dp table to find the alignment
-            # return the possible indel substitution locations
 
             # base case
             if i == 0 and j == 0:
@@ -55,31 +53,29 @@ class Read_mapper():
             best_score = min(insert, delete, match)
 
     
-
             if best_score == insert:
-                possible_indel_sub_loc.append(('insert', j - 1, ref[j-1]))
+                possible_indel_sub_loc.append(('>I', j-1, '_', ref[j-1]))
                 return backtrack(dp, read, i, j-1)
 
 
             elif best_score == delete:
-                possible_indel_sub_loc.append(('delete', i - 1, read[i-1]))
+                possible_indel_sub_loc.append(('>D', i-1, '_', read[i-1]))
                 return backtrack(dp, read, i-1, j)
             elif best_score == match:
                 # if the characters are the same, do nothing
                 if read[i-1] != ref[j-1]:
-                    possible_indel_sub_loc.append(('substitue', ref[j-1], read[i-1]))
+                    possible_indel_sub_loc.append(('>S', i-1, ref[j-1], read[i-1]))
                 return backtrack(dp, read, i-1, j-1)
 
             
 
-        
         # fill the dp table
         for i in range(1, read_length + 1):
-            for j in range(1, len(self.reference) + 1):
-                match = dp[i-1][j-1] + (0 if read[i-1] == self.reference[j-1] else 1)
+            for j in range(1, len(ref) + 1):
+                match = dp[i-1][j-1] + (0 if read[i-1] == ref[j-1] else 1)
                 delete = dp[i-1][j] + 1
                 insert = dp[i][j-1] + 1
-                dp[i][j] = min(match, delete, insert, 0)
+                dp[i][j] = min(match, delete, insert)
 
         backtrack(dp, read, read_length, len(ref))
 
@@ -105,7 +101,7 @@ class Read_mapper():
             for j in range(read_length):
                 if read[j] != window[j]:
                     count += 1
-                    possible_mutation_loc.append(j)
+                    possible_mutation_loc.append(('>S', j, window[j], read[j]))
 
             if count <= self.threshold:
                 return i, possible_mutation_loc
@@ -117,24 +113,27 @@ class Read_mapper():
         # create predcited_mutations.txt
         mutation_list = open('predicted_mutations.txt', 'w')
         overlapping_mutations = {}
-        for read in self.reads:
+        pos_map = self.create_position_map()
+        for read in tqdm(self.reads):
+
             if self.approach == 'sliding_window':
                 # sliding window approach
                 start, possible_mutation_loc = self.slide_window(read)
 
             elif self.approach == 'dp':
                 # dynamic programming approach
-                start, possible_mutation_loc = self.needleman_wunsch(read)
+                
+                start, possible_mutation_loc = self.find_best_pos(read, pos_map)
             else:
                 raise NotImplementedError(f'approach {self.approach} not implemented')
             
             # if the read is aligned
             if start > 0:
-                for j in possible_mutation_loc:
-                    if start + j not in overlapping_mutations:
-                        overlapping_mutations[start + j] = [read[j]]
+                for op, loc, ref_char, char in possible_mutation_loc:
+                    if start + loc not in overlapping_mutations:
+                        overlapping_mutations[start + loc] = [(op, start + loc, ref_char, char)]
                     else:
-                        overlapping_mutations[start + j].append(read[j])
+                        overlapping_mutations[start + loc].append((op, start + loc, ref_char, char))
 
         for pos, value in overlapping_mutations.items():
             # if the mutation is not present in at least 3 reads, ignore it
@@ -142,10 +141,12 @@ class Read_mapper():
                 continue
 
             # take the majority mutation in value
-            mutation = max(value, key = value.count)
+            mutation = max(value, key = lambda x: x[3])
+            
+            ref_char = ' ' + mutation[2] + ' ' if mutation[0] == '>S' else ' '
 
             mutation_list.write(
-                '>S' + str(pos) + ' ' + self.reference[pos] + ' ' + mutation + '\n')
+                mutation[0] + str(pos) + ref_char + mutation[3] + '\n')
                         
         mutation_list.close()
 
@@ -189,37 +190,39 @@ class Read_mapper():
             
         return candidate_pos
     
-    def find_best_pos(self, candidate_pos, read):
+    def find_best_pos(self, read, pos_map):
+        if len(read) < 45:
+            return -1, None
+        
+        read_length = 45
         # find the best position of the read in the reference genome
         # return the best position and the corresponding fragment from the reference genome
-        best_pos = -1
-        best_frag = ''
-        best_score = float('inf')
+        candidate_pos = self.find_possible_pos(pos_map, read)
 
+        # remove duplicates
+        candidate_pos = list(set(candidate_pos))
+
+        best_pos = -1
+        best_score = float('inf')
+        possible_indel_sub_loc = []
         for pos, frag in candidate_pos:
-            score, _ = self.needleman_wunsch(read, frag)
+            score, possible_indel_sub_loc = self.needleman_wunsch(read[0:read_length], frag)
             if score < best_score:
                 best_score = score
                 best_pos = pos
-                best_frag = frag
 
-        return best_pos, best_frag
+        return best_pos, possible_indel_sub_loc
 
 def main():
-    reference = open('project1a_reference_genome.fasta', 'r')
+    reference = open('sample_reference_genome.fasta', 'r')
     reference = ''.join(reference.readlines()[1:]).replace('\n', '')
 
-    reads = open('project1a_with_error_paired_reads.fasta', 'r')
+    reads = open('sample_with_error_paired_reads.fasta', 'r')
     reads = [line.replace('\n', '') for line in reads.readlines() if line[0] != '>']
 
     # read_map
     mapping = Read_mapper(reference, reads, 2, 'dp')
-    # mapping.read_map()
-    map = mapping.create_position_map()
-
-    for key, value in map.items():
-        if len(value) > 1:
-            print(key, value)
+    mapping.read_map()
 
 
 
