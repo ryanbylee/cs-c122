@@ -1,6 +1,6 @@
 import itertools
 
-class Read_map():
+class Read_mapper():
     def __init__(self, reference, reads, threshold, paired = False):
         self.reference = reference
         self.reads = reads
@@ -30,8 +30,11 @@ class Read_map():
         # align the reads to the reference genome
         # return the position of the read in the reference genome
         read_length = len(read)
+        
+        # ignore reads that are not of length 50
         if read_length != 50:
             return -1, None
+        
         for i in range(len(self.reference) - read_length + 1):
             window = self.reference[i:i+read_length]
             count = 0
@@ -61,44 +64,49 @@ class Read_map():
                         overlapping_mutations[start + j] = [read[j]]
                     else:
                         overlapping_mutations[start + j].append(read[j])
+
         for pos, value in overlapping_mutations.items():
+            # if the mutation is not present in at least 3 reads, ignore it
             if len(value) < 3:
                 continue
-            # take the most common mutation in value
+
+            # take the majority mutation in value
             mutation = max(value, key = value.count)
+
             mutation_list.write(
                 '>S' + str(pos) + ' ' + self.reference[pos] + ' ' + mutation + '\n')
                         
         mutation_list.close()
 
+    # not used; meant to be a helper function for hashmap approach
     def create_position_map(self):
         pos_map = {}
         len_frag = 10
 
-        # create the keys for the dictionary, which are all possible combinations of A, T, C, G in length of 10
+        # create the keys for the dictionary, which are all possible strings of length 10 that consist A, T, C, G (~4^10 entries)
         for string in itertools.product('AGCT', repeat=10):
             pos_map[''.join(string)] = []
 
         
         for string in pos_map.keys():
-            # locate the position of the fragment in the reference genome
+            # locate the position of the fragment in the reference genome and populate the values of the dictionary
             for i in range(len(self.reference) - len_frag + 1):
                 if self.reference[i:i+len_frag] == string:
                     pos_map[string].append(i)
 
         for read in self.reads:
+            # split the read into 5 fragments
             frag_list = [read[0:len_frag], 
                         read[len_frag:2*len_frag], 
                         read[2*len_frag:3*len_frag], 
                         read[3*len_frag:4*len_frag], 
                         read[4*len_frag:5*len_frag]]
             
-            # for each fragment, find the position in the reference and store it in pos_map
             for i, frag in enumerate(frag_list):
-                # search the reference for the fragment
-            #    search for the fragment in pos_map
+                # search for the fragment in pos_map
                 if frag in pos_map:
-                    print('frag ' + str(i) + ' found')
+                    print(frag + ' found at: ' + str(pos_map[frag]))
+
         return pos_map
 
 
@@ -111,11 +119,10 @@ def main():
     reads = [line.replace('\n', '') for line in reads.readlines() if line[0] != '>']
 
     # read_map
-    mapping = Read_map(reference, reads, 2, True)
+    mapping = Read_mapper(reference, reads, 4, True)
     mapping.read_map_sliding_window()
     # mapping.create_position_map()
 
-    # mapping.read_map_sliding_window()
 
 
 if __name__ == '__main__':
