@@ -54,12 +54,12 @@ class Read_mapper():
 
     
             if best_score == insert:
-                possible_indel_sub_loc.append(('>I', j-1, '_', ref[j-1]))
+                possible_indel_sub_loc.append(('>D', j-1, '_', ref[j-1]))
                 return backtrack(dp, read, i, j-1)
 
 
             elif best_score == delete:
-                possible_indel_sub_loc.append(('>D', i-1, '_', read[i-1]))
+                possible_indel_sub_loc.append(('>I', i-1, '_', read[i-1]))
                 return backtrack(dp, read, i-1, j)
             elif best_score == match:
                 # if the characters are the same, do nothing
@@ -214,10 +214,10 @@ class Read_mapper():
         return best_pos, possible_indel_sub_loc
 
 def main():
-    reference = open('sample_reference_genome.fasta', 'r')
+    reference = open('project1b-s_reference_genome.fasta', 'r')
     reference = ''.join(reference.readlines()[1:]).replace('\n', '')
 
-    reads = open('sample_with_error_paired_reads.fasta', 'r')
+    reads = open('project1b-s_with_error_paired_reads.fasta', 'r')
     reads = [line.replace('\n', '') for line in reads.readlines() if line[0] != '>']
 
     # read_map
