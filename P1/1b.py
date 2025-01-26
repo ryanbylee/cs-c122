@@ -114,6 +114,7 @@ class Read_mapper():
         mutation_list = open('predicted_mutations.txt', 'w')
         overlapping_mutations = {}
         pos_map = self.create_position_map()
+
         for read in tqdm(self.reads):
 
             if self.approach == 'sliding_window':
@@ -136,8 +137,8 @@ class Read_mapper():
                         overlapping_mutations[start + loc].append((op, start + loc, ref_char, char))
 
         for pos, value in overlapping_mutations.items():
-            # if the mutation is not present in at least 3 reads, ignore it
-            if len(value) < 3:
+            # if the mutation is not present in at least 7 reads, ignore it
+            if len(value) < 7:
                 continue
 
             # take the majority mutation in value
@@ -172,6 +173,8 @@ class Read_mapper():
         read_frags = [read[i:i+len_frag] for i in range(0, len(read), len_frag)]
 
         candidate_pos = [] # store starting positions and the corresponding fragments from reference genome
+
+        # [(2, 'AGCT'), (), ()]
         # since each read is divided into 3 fragments and the error threshold is 2, there must be at least one fragment out of 3 that matches the reference genome
         for i, frag in enumerate(read_frags):
             if frag in ref_pos_map:
