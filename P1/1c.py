@@ -94,6 +94,7 @@ class Read_mapper():
             for hash_function in self.hash_functions:
                 if bloom_filter[hash_function(kmer)] == 0:
                     match_all_hash = False
+                    break
             if match_all_hash:
                 count += 1
         return count
