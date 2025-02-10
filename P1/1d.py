@@ -8,12 +8,11 @@ from tqdm import tqdm
 '''
 
 class Metagenome():
-    def __init__(self, genomes, reads, kmer_size = 21, minimizer_size = 15):
+    def __init__(self, genomes, reads, kmer_size = 21, minimizer_size = 12):
         self.genomes = genomes
         self.kmer_size = kmer_size
         self.minimizer_size = minimizer_size
-        # minimizer_maps: list of minimizer maps for each genome, key: minimizer, value: list of positions
-        self.minimizer_maps = [self.create_minimizer_map(genome) for genome in tqdm(genomes, desc='creating minimizer maps...')]
+        self.minimizer_maps = [(self.create_minimizer_map(genome[0]), genome[1]) for genome in tqdm(genomes, desc='creating minimizer maps...')]
         self.reads = reads
 
     
@@ -24,6 +23,24 @@ class Metagenome():
         minimizer = min([seq[i:i+self.minimizer_size] for i in range(len(seq) - self.minimizer_size + 1)])
 
         return minimizer
+    
+
+    def create_minimizer_map(self, genome):
+
+        minimizer_map = {}
+       
+        for i in range(len(genome) - self.kmer_size + 1):
+            kmer = genome[i:i+self.kmer_size]
+
+            # alphabetical minimum
+            minimizer = self.calculate_minimizer(kmer)
+
+            if minimizer not in minimizer_map:
+                minimizer_map[minimizer] = [i]
+            else:
+                minimizer_map[minimizer].append(i)
+
+        return minimizer_map
     
     def needleman_wunsch(self, read, ref):
         # Needleman-Wunsch Algorithm, global alignment using dynamic programming
@@ -73,24 +90,6 @@ class Metagenome():
         backtrack(dp, read, read_length, len(ref))
 
         return dp[read_length][len(ref)]
-            
-
-    def create_minimizer_map(self, genome):
-
-        minimizer_map = {}
-       
-        for i in range(len(genome) - self.kmer_size + 1):
-            kmer = genome[i:i+self.kmer_size]
-
-            # alphabetical minimum
-            minimizer = self.calculate_minimizer(kmer)
-
-            if minimizer not in minimizer_map:
-                minimizer_map[minimizer] = [i]
-            else:
-                minimizer_map[minimizer].append(i)
-
-        return minimizer_map
 
     
     def find_candidate_pos(self, read, minimizer_map):
@@ -111,21 +110,22 @@ class Metagenome():
     
     def count_occurance(self, read):
         # for read, go thru all minimizer map, get candidate positions, and log the count of positions that require < 7 mutations
+        # ^nvm
         # return the genome number with the most occurances
         max_count = 0
         max_genome = -1
-        for i, minimizer_map in enumerate(self.minimizer_maps):
+        for minimizer_map, i in self.minimizer_maps:
             candidate_pos = self.find_candidate_pos(read, minimizer_map)
-            count = 0
+            count = len(candidate_pos)
 
-            for pos in candidate_pos:
-                ref_window = self.genomes[i][pos: pos + len(read)]
-                if len(ref_window) != len(read):
-                    continue
-                score = self.needleman_wunsch(read, ref_window)
+            # for pos in candidate_pos:
+            #     ref_window = self.genomes[i][pos: pos + len(read)]
+            #     if len(ref_window) != len(read):
+            #         continue
+            #     score = self.needleman_wunsch(read, ref_window)
 
-                if score < 7:
-                    count += 1
+            #     if score < 7:
+            #         count += 1
 
             if count > max_count:
                 max_count = count
@@ -135,24 +135,26 @@ class Metagenome():
 
 def main():
     genomes = []
+    # read genome numbers from selected_genomes.txt
+    selected_genomes = open('project1d-files/selected_genomes.txt', 'r')
+    selected_genomes = [int(line.strip()) for line in selected_genomes.readlines()]
 
-    # take first 100 genomes
-    for i in range(0, 10):
-        genome = open(f'project1c_sample/project1c_sample_genome_{i}.fasta', 'r')
+    for i in selected_genomes:
+        genome = open(f'project1d-files/project1d_genome_{i}.fasta', 'r')
         genome = ''.join(genome.readlines()[1:]).replace('\n', '')
 
-        genomes.append(genome)
+        genomes.append((genome, i))
 
-    reads = open('project1c_sample/project1c_sample_reads.fasta', 'r')
+    reads = open('project1d-files/project1d_reads.fasta', 'r')
     reads = [line.replace('\n', '') for line in tqdm(reads.readlines(), desc='loading reads...') if line[0] != '>']
 
-    # take only the first 2000 reads
-
+    # load only first 5k reads
+    # reads = reads[:5000]
     # read_map
     mapping = Metagenome(genomes, reads)
 
 
-    res = open('project1c_sample/answers.txt', 'w')
+    res = open('project1d-files/answers.txt', 'w')
     i = 0
     for read in tqdm(reads, desc='mapping reads...'):
         res.write(f'>read_{i}\tGenome_Number_{mapping.count_occurance(read)}\n')
