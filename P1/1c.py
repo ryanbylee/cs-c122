@@ -24,7 +24,7 @@ optimal m/n (ratio of length vs. num of reads) = 9.56 ~ 10
 
 class Read_mapper():
     def __init__(self, genomes, reads):
-        self.genomes = self.process_genomes(genomes)
+        self.genomes = genomes
         self.hash_functions = self.generate_hash_functions(7)
         self.bloom_filters = []
 
