@@ -1,62 +1,93 @@
 from tqdm import tqdm
+from collections import deque
 
-class graph():
-    def __init__(self, spectrum):
-        self.graph = self.build_graph()
+class DeBruijnGraph:
+    def __init__(self, spectrum, headers):
         self.reads = spectrum
+        self.headers = headers
+        self.graph = self._build_graph()
+        self.path = self._find_eulerian_path()
 
+    def _build_graph(self):
+        g = {}
+        for i, kmer in tqdm(enumerate(self.reads), total=len(self.reads)):
+            prefix = kmer[:-1]
+            suffix = kmer[1:]
+            if prefix not in g:
+                g[prefix] = []
+            if suffix not in g:
+                g[suffix] = []
+            g[prefix].append(suffix)
+        return g
 
-    def build_graph(self):
-        graph = {}
-        for i, read in enumerate(self.reads):
-            prefix = read[:-1]
-            suffix = read[1:]
-            if prefix not in graph:
-                graph[prefix] = []
-            graph[prefix].append((suffix, i))
-        return graph
-    
-    def eulerian_path(self):
-        graph = self.graph
-        stack = []
-        path = []
-        current_node = list(graph.keys())[0]
-        while stack or current_node in graph:
-            if current_node in graph:
-                stack.append(current_node)
-                next_node = graph[current_node].pop()
-                current_node = next_node
+    def _find_eulerian_path(self):
+        in_deg, out_deg = {}, {}
+        nodes = set(self.graph.keys())
+        for node, neighbors in tqdm(self.graph.items(), desc="in/out deg"):
+            out_deg[node] = out_deg.get(node, 0) + len(neighbors)
+            for neighbor in neighbors:
+                in_deg[neighbor] = in_deg.get(neighbor, 0) + 1
+                nodes.add(neighbor)
+                if neighbor not in self.graph:
+                    self.graph[neighbor] = []
+        for node in nodes:
+            if node not in out_deg:
+                out_deg[node] = 0
+            if node not in in_deg:
+                in_deg[node] = 0
+        start_node = next(iter(self.graph))
+        for node in nodes:
+            if out_deg.get(node, 0) - in_deg.get(node, 0) == 1:
+                start_node = node
+                break
+        stack = [start_node]
+        path = deque()
+        while stack:
+            node = stack[-1]
+            if node not in self.graph:
+                self.graph[node] = []
+            if self.graph[node]:
+                stack.append(self.graph[node].pop(0))
             else:
-                path.append(current_node)
-                current_node = stack.pop()
-        path.append(current_node)
-        return path[::-1]
-    
-    def path_to_gene(self, path):
-        if not path:
-            return ""
-        genome = path[0]
-        for i in range(1, len(path)):
-            genome += path[i][-1]
-        return genome
-    
-    def reconstruct_genome(self):
-        path = self.eulerian_path()
-        return self.path_to_gene(path)
+                path.appendleft(stack.pop())
+        return list(path)
 
+    def reconstruct_genome(self):
+        genome = self.path[0]
+        for kmer in tqdm(self.path[1:]):
+            genome += kmer[-1]
+        return genome
+
+    def map_reads_to_genome(self):
+        genome = self.reconstruct_genome()
+        ordered_headers = []
+        for header, read in tqdm(zip(self.headers, self.reads), total=len(self.reads)):
+            if read in genome:
+                ordered_headers.append((genome.index(read), header))
+        ordered_headers.sort()
+        return [h[1] for h in ordered_headers]
+
+    def write_output(self, output_file):
+        sorted_headers = self.map_reads_to_genome()
+        with open(output_file, "w") as f:
+            for header in tqdm(sorted_headers):
+                f.write(f">{header}\n")
+
+def load_reads(file_path):
+    reads, headers = [], []
+    with open(file_path, "r") as f:
+        for line in tqdm(f, desc="Loading reads"):
+            line = line.strip()
+            if line.startswith(">"):
+                headers.append(line[1:])
+            else:
+                reads.append(line)
+    return reads, headers
+
+def main():
+    reads, headers = load_reads("project2a_spectrum.fasta")
+    db_graph = DeBruijnGraph(reads, headers)
+    db_graph.write_output("predictions.txt")
 
 if __name__ == "__main__":
-    reads = open('project2_sample1_spectrum.fasta', 'r')
-    reads = [line.replace('\n', '') for line in tqdm(reads.readlines(), desc='loading reads...') if line[0] != '>']
-
-    de_bruijn_graph = graph(reads)
-    output = open('predictions.txt', 'w')
-
-    path = de_bruijn_graph.eulerian_path()
-
-    for i in path:
-
-
-    genome = de_bruijn_graph.reconstruct_genome()
-
-
+    main()
