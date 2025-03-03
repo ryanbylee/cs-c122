@@ -22,15 +22,16 @@ def main():
         dataset = DNA_Dataset("bound.fasta", "notbound.fasta")
         print(f'shape: {dataset.data.shape}')
 
-        trainset, validset, testset = torch.utils.data.random_split(dataset, [0.6, 0.2, 0.2])
-        train_loader = DataLoader(trainset, batch_size=32, shuffle=True)
-        valid_loader = DataLoader(validset, batch_size=32, shuffle=True)
-        test_loader = DataLoader(testset, batch_size=32, shuffle=False)
+        trainset, validset = torch.utils.data.random_split(dataset, [0.95, 0.05]) # 90 10 split for best res
+        print(f"trainset: {len(trainset)}, validset: {len(validset)}")
+        train_loader = DataLoader(trainset, batch_size=16, shuffle=True)
+        valid_loader = DataLoader(validset, batch_size=16, shuffle=True)
+        # test_loader = DataLoader(testset, batch_size=32, shuffle=False)
         criterion = nn.BCEWithLogitsLoss()
         optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
-        train_valid(model, train_loader, valid_loader, criterion, optimizer, num_epochs=10)
-        test(model, test_loader)
+        train_valid(model, train_loader, valid_loader, criterion, optimizer, num_epochs=5)
+        # test(model, test_loader)
 
         # save weights
         torch.save(model.state_dict(), 'weights.pth')
