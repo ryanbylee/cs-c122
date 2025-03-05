@@ -1,4 +1,5 @@
 import torch
+import matplotlib.pyplot as plt
 
 def load_fasta(file_path):
         print(f"loading {file_path}...")
@@ -25,3 +26,12 @@ def one_hot_encode(seq):
         one_hot_seq[j, nuc_to_index[nuc]] = 1
     return one_hot_seq
 
+
+def plot_losses(train_losses, valid_losses):
+    plt.plot(train_losses, label='train')
+    plt.plot(valid_losses, label='valid')
+    plt.legend()
+    plt.xlabel('Epoch')
+    plt.ylabel('Loss')
+    plt.title('Training and Validation Loss')
+    plt.show()
