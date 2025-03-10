@@ -1,5 +1,7 @@
 import torch
 import matplotlib.pyplot as plt
+from sklearn.metrics import roc_curve, auc
+import numpy as np
 
 def load_fasta(file_path):
         print(f"loading {file_path}...")
@@ -31,7 +33,35 @@ def plot_losses(train_losses, valid_losses):
     plt.plot(train_losses, label='train')
     plt.plot(valid_losses, label='valid')
     plt.legend()
-    plt.xlabel('Epoch')
+    plt.xticks(range(1, len(train_losses) + 1))
+    plt.xlabel('Epochs')
     plt.ylabel('Loss')
+    plt.ylim(0, 0.4)
     plt.title('Training and Validation Loss')
+    plt.show()
+
+def plot_auc(valid_loader, model):
+    pred = []
+    labels_pred = []
+    with torch.no_grad():
+        for inputs, labels in valid_loader:
+            outputs = model(inputs)
+            pred.append(torch.sigmoid(outputs).cpu().numpy())
+            labels_pred.append(labels.cpu().numpy())
+    pred = np.concatenate(pred)
+    labels_pred = np.concatenate(labels_pred)
+
+
+    fpr, tpr, _ = roc_curve(labels_pred, pred)
+    roc_auc = auc(fpr, tpr)
+
+    plt.figure()
+    plt.plot(fpr, tpr, color='darkorange', lw=2, label='ROC curve (area = %0.2f)' % roc_auc)
+    plt.plot([0, 1], [0, 1], color='navy', lw=2, linestyle='--')
+    plt.xlim([0.0, 1.0])
+    plt.ylim([0.0, 1.05])
+    plt.xlabel('False Positive Rate')
+    plt.ylabel('True Positive Rate')
+    plt.title('Receiver Operating Characteristic')
+    plt.legend(loc="lower right")
     plt.show()

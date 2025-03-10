@@ -11,7 +11,6 @@ def main():
     torch.manual_seed(42)
 
     # check if GPU is available
-
     device_config = None
     if torch.cuda.is_available():
         device_config = 'cuda'
@@ -29,6 +28,15 @@ def main():
     if weights_exist:
         print('Loading model weights...')
         model.load_state_dict(torch.load('weights.pth'))
+        model.eval()
+
+
+        # plot aucroc
+        dataset = DNA_Dataset("bound.fasta", "notbound.fasta", 'cpu')
+
+        _, validset = torch.utils.data.random_split(dataset, [0.95, 0.05]) # 90 10 split for best res
+        valid_loader = DataLoader(validset, batch_size=16, shuffle=True)
+        plot_auc(valid_loader, model)
     else:
         print('Training new model...')
         dataset = DNA_Dataset("bound.fasta", "notbound.fasta", 'cpu')
@@ -42,9 +50,9 @@ def main():
         criterion = nn.BCEWithLogitsLoss()
         optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
-        train_losses, valid_losses = train_valid(model, train_loader, valid_loader, criterion, optimizer, num_epochs=6)
+        train_losses, valid_losses, preds, pred_labels = train_valid(model, train_loader, valid_loader, criterion, optimizer, num_epochs=6)
 
-
+        
         # test(model, test_loader)
 
         # save weights
@@ -62,6 +70,7 @@ def main():
     outputs = model(test_data)
     predicted = (torch.sigmoid(outputs) > 0.5).float()
     predicted = predicted.cpu().numpy()
+
 
     with open("predictions.txt", "w") as f:
         for seq_num in tqdm(np.where(predicted == 1)[0], desc="Writing predictions"):

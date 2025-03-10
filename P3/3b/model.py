@@ -9,31 +9,35 @@ class Model(nn.Module):
     def __init__(self):
         super(Model, self).__init__()
 
-        self.pool_weight = nn.Parameter(torch.tensor(0.5))
-
         self.seq1 = nn.Sequential(
-            nn.Conv2d(1, 16, kernel_size=(21, 4), stride=1),
+            nn.Conv2d(1, 32, kernel_size=(21, 4), stride=1),
             nn.ReLU(),
         )
         self.seq2 = nn.Sequential(
-            nn.Conv2d(16, 32, kernel_size=(5, 1), stride=1),
+            nn.Conv2d(32, 64, kernel_size=(5, 1), stride=1),
             nn.ReLU(),
         )
-        
-        self.fc1 = nn.Linear(32*43, 128)
-        self.fc2 = nn.Linear(128, 1)
-        # self.fc1 = nn.Linear(16*90, 128)
-        # self.fc2 = nn.Linear(128, 1)
+        self.pool_weight = nn.Parameter(torch.tensor(0.5))
+
+        self.fc1 = nn.Linear(64*43, 64)
+        self.fc2 = nn.Linear(64, 1)
+
 
         # dimension calculation:
         '''
+        conv1: 32 channels, kernel size (21, 4), stride 1
+        conv2: 64 channels, kernel size (5, 1), stride 1
+        pool: kernel size (2, 1), stride 2
+        initial: (N, 1, 201, 4)
+        after conv1: (N, 32, 181, 1)
+        after pool: (N, 32, 90, 1)
+        after conv2: (N, 64, 86, 1)
+        after pool: (N, 64, 43, 1)
+        after flatten: (N, 64*43)
+        
         for 2 conv:
-        initiai: (N, 1, 201, 4)
-        after conv1: (N, 16, 177, 1)
-        after pool: (N, 16, 88, 1)
-        after conv2: (N, 32, 84, 1)
-        after pool: (N, 32, 42, 1)
-        after flatten: (N, 32*42)
+
+
         '''
         
         '''
@@ -49,16 +53,17 @@ class Model(nn.Module):
         initial: (N, 1, 201, 4)
         after conv1: (N, 16, 181, 1)
         after pool: (N, 16, 90, 1)
-        after conv2: (N, 32, 81, 1)
-        after pool: (N, 32, 40, 1)
-        after conv3: (N, 64, 36, 1)
-        after pool: (N, 64, 18, 1)
-        after flatten: (N, 64*18)
+        after conv2: (N, 32, 86, 1)
+        after pool: (N, 32, 43, 1)
+        after conv3: (N, 64, 41, 1)
+        after pool: (N, 64, 20, 1)
+
 
         '''
     def pooling(self, x):
-        x = (self.pool_weight * nn.MaxPool2d(kernel_size=(2, 1), stride=2)(x)) + ((1-self.pool_weight) * nn.AvgPool2d(kernel_size=(2, 1), stride=2)(x))
-        return x
+        
+        return (self.pool_weight * nn.MaxPool2d(kernel_size=(2, 1), stride=2)(x)) + \
+               ((1-self.pool_weight) * nn.AvgPool2d(kernel_size=(2, 1), stride=2)(x))
     
     def forward(self, x):
         x = self.seq1(x)
@@ -76,6 +81,7 @@ def train_valid(model, train_loader, valid_loader, criterion, optimizer, num_epo
     # create plot
     train_losses = []
     valid_losses = []
+    preds = []
 
     # TODO: 5-fold cross validation?
     # for fold in range(5):
@@ -108,11 +114,14 @@ def train_valid(model, train_loader, valid_loader, criterion, optimizer, num_epo
                 loss = criterion(outputs.squeeze(), labels.float())
                 valid_loss += loss.item()
                 predicted = (torch.sigmoid(outputs) > 0.5).float()
+                preds.append(predicted)
                 total += labels.size(0)
                 correct += (predicted.squeeze() == labels).sum().item()
 
             print(f'Validation Loss: \t{valid_loss / len(valid_loader):.4f}, Accuracy: {100 * correct / total:.2f}%')
             valid_losses.append(valid_loss / len(valid_loader))
+        
+            print(model.pool_weight)
     return train_losses, valid_losses
 
 def test(model, test_loader):
